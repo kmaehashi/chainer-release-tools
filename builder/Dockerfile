@@ -4,6 +4,8 @@ FROM ${base_image}
 RUN yum -y update && \
     yum -y install gcc gcc-c++ make patch git curl && \
     yum -y install bzip2-devel openssl-devel readline-devel libffi-devel && \
+    yum -y install centos-release-scl && \
+    yum -y install devtoolset-6 && \
     yum clean all
 
 # Install OpenSSL; Python 3.7 requires OpenSSL 1.0.2 or 1.1 compatible libssl
@@ -36,19 +38,26 @@ RUN for VERSION in ${python_versions}; do \
     done;
 
 # Install Python libraries.
-ARG cython_version
 RUN for VERSION in ${python_versions}; do \
       echo "Installing libraries on Python ${VERSION}..." && \
       pyenv global ${VERSION} && \
       pip install -U pip setuptools && \
       pip install argparse && \
-      pip install Cython==${cython_version} wheel auditwheel; \
+      pip install wheel auditwheel; \
+      pip install cmake; \
     done && \
     pyenv global system
 
 # Install requirements for agents.
 RUN yum -y install python-setuptools && yum clean all
 RUN easy_install argparse
+
+# Environment variables to build ChainerX.
+ENV CXX=/opt/rh/devtoolset-6/root/usr/bin/g++
+ENV CC=/opt/rh/devtoolset-6/root/usr/bin/gcc
+ENV CHAINER_BUILD_CHAINERX=1
+ENV CHAINERX_BUILD_CUDA=1
+ENV CUDNN_ROOT_DIR=/usr/local/cuda
 
 COPY agent.py /
 ENTRYPOINT ["/agent.py"]

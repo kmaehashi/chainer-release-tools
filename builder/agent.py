@@ -33,7 +33,7 @@ class BuilderAgent(object):
             help='setup.py action to invoke')
         parser.add_argument(
             '--source', type=str, required=True,
-            help='Path to the CuPy source directory')
+            help='Path to the source directory')
         parser.add_argument(
             '--python', type=str,
             help='Python version to use for setup')
@@ -62,10 +62,10 @@ class BuilderAgent(object):
             cmdline = pycommand + ['-m', 'pip', 'install'] + args.requires
             self._run(*cmdline)
 
-        self._log('Changing directory to cupy source tree')
+        self._log('Changing directory to chainer source tree')
         os.chdir(args.source)
         try:
-            self._log('Running CuPy setup...')
+            self._log('Running Chainer setup...')
             cmdline = pycommand + ['setup.py', args.action] + setup_args
             self._run(*cmdline)
         finally:

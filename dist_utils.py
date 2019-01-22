@@ -31,7 +31,7 @@ def wheel_name(pkg_name, version, python_version, platform_tag):
 
 
 def get_version_from_source_tree(source_tree):
-    version_file_path = '{}/cupy/_version.py'.format(source_tree)
+    version_file_path = '{}/chainer/_version.py'.format(source_tree)
     return imp.load_source('_version', version_file_path).__version__
 
 

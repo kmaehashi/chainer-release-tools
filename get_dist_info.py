@@ -27,7 +27,7 @@ class DistInfoPrinter(object):
             help='build target')
         parser.add_argument(
             '--source', type=str, required=True,
-            help='path to the CuPy source tree; must be a clean checkout')
+            help='path to the source tree; must be a clean checkout')
 
         # Options specific for wheels:
         parser.add_argument(
@@ -50,7 +50,7 @@ class DistInfoPrinter(object):
             pkg_name = WHEEL_WINDOWS_CONFIGS[args.cuda]['name']
             filename = wheel_name(pkg_name, version, args.python, 'win_amd64')
         elif args.target == 'sdist':
-            pkg_name = 'cupy'
+            pkg_name = 'chainer'
             filename = sdist_name(pkg_name, version)
         print('DIST_FILE_NAME="{}"'.format(filename))
         print('DIST_PACKAGE_NAME="{}"'.format(pkg_name))

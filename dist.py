@@ -178,7 +178,7 @@ class Controller(object):
                 '(version {}, for CUDA {} + Python {})'.format(
                     source, version, cuda_version, python_version))
             action = 'bdist_wheel'
-            image_tag = 'cupy-builder-{}'.format(cuda_version)
+            image_tag = 'chainer-builder-{}'.format(cuda_version)
             base_image = WHEEL_LINUX_CONFIGS[cuda_version]['image']
             package_name = WHEEL_LINUX_CONFIGS[cuda_version]['name']
             long_description = WHEEL_LONG_DESCRIPTION.format(cuda=cuda_version)
@@ -191,7 +191,7 @@ class Controller(object):
             log('Starting sdist build from {} (version {})'.format(
                 source, version))
             action = 'sdist'
-            image_tag = 'cupy-builder-sdist'
+            image_tag = 'chainer-builder-sdist'
             base_image = SDIST_CONFIG['image']
             package_name = 'chainer'
             long_description = SDIST_LONG_DESCRIPTION
@@ -203,33 +203,31 @@ class Controller(object):
         # Arguments for the agent.
         agent_args = [
             '--action', action,
-            '--source', 'cupy',
+            '--source', 'chainer',
             '--python', python_version,
             '--chown', '{}:{}'.format(os.getuid(), os.getgid()),
         ]
 
         # Add arguments to pass to setup.py.
         setup_args = [
-            '--cupy-package-name', package_name,
-            '--cupy-long-description', '../description.rst',
+            '--chainer-package-name', package_name,
+            '--chainer-long-description', '../description.rst',
         ]
         if target == 'wheel-linux':
             # Add requirements for build.
             for req in WHEEL_PYTHON_VERSIONS[python_version]['requires']:
                 agent_args += ['--requires', req]
-
-            setup_args += [
-                '--cupy-no-rpath',
-            ]
-            for lib in WHEEL_LINUX_CONFIGS[cuda_version]['libs']:
-                setup_args += ['--cupy-wheel-lib', lib]
             agent_args += setup_args
 
         # Create a working directory.
-        workdir = tempfile.mkdtemp(prefix='cupy-dist-')
+        workdir = tempfile.mkdtemp(prefix='chainer-dist-')
 
         try:
             log('Using working directory: {}'.format(workdir))
+
+            # Copy source tree to working directory.
+            log('Copying source tree from: {}'.format(source))
+            shutil.copytree(source, '{}/chainer'.format(workdir))
 
             # Add long description file.
             if long_description is not None:
@@ -245,7 +243,7 @@ class Controller(object):
             log('Finished build')
 
             # Copy assets.
-            asset_path = '{}/cupy/dist/{}'.format(workdir, asset_name)
+            asset_path = '{}/chainer/dist/{}'.format(workdir, asset_name)
             output_path = '{}/{}'.format(output, asset_dest_name)
             log('Copying asset from {} to {}'.format(asset_path, output_path))
             shutil.copy2(asset_path, output_path)
@@ -308,7 +306,7 @@ class Controller(object):
 
         agent_args = [
             '--action', action,
-            '--source', 'cupy',
+            '--source', 'chainer',
         ]
 
         # Add requirements for build.
@@ -317,26 +315,20 @@ class Controller(object):
 
         # Add arguments to pass to setup.py.
         setup_args = [
-            '--cupy-package-name', package_name,
-            '--cupy-long-description', '../description.rst',
+            '--chainer-package-name', package_name,
+            '--chainer-long-description', '../description.rst',
         ]
-        for lib in WHEEL_WINDOWS_CONFIGS[cuda_version]['libs']:
-            libpath = find_file_in_path(lib)
-            if libpath is None:
-                raise RuntimeError(
-                    'Library {} could not be found in PATH'.format(lib))
-            setup_args += ['--cupy-wheel-lib', libpath]
         agent_args += setup_args
 
         # Create a working directory.
-        workdir = tempfile.mkdtemp(prefix='cupy-dist-')
+        workdir = tempfile.mkdtemp(prefix='chainer-dist-')
 
         try:
             log('Using working directory: {}'.format(workdir))
 
             # Copy source tree to working directory.
             log('Copying source tree from: {}'.format(source))
-            shutil.copytree(source, '{}/cupy'.format(workdir))
+            shutil.copytree(source, '{}/chainer'.format(workdir))
 
             # Add long description file.
             if long_description is not None:
@@ -351,7 +343,7 @@ class Controller(object):
             log('Finished build')
 
             # Copy assets.
-            asset_path = '{}/cupy/dist/{}'.format(workdir, asset_name)
+            asset_path = '{}/chainer/dist/{}'.format(workdir, asset_name)
             output_path = '{}/{}'.format(output, asset_dest_name)
             log('Copying asset from {} to {}'.format(asset_path, output_path))
             shutil.copy2(asset_path, output_path)
@@ -374,12 +366,12 @@ class Controller(object):
         """Verify a single distribution for Linux."""
 
         if target == 'sdist':
-            image_tag = 'cupy-verifier-sdist'
+            image_tag = 'chainer-verifier-sdist'
             base_image = SDIST_CONFIG['verify_image']
             systems = SDIST_CONFIG['verify_systems']
             assert cuda_version is None
         elif target == 'wheel-linux':
-            image_tag = 'cupy-verifier-wheel-linux-{}'.format(cuda_version)
+            image_tag = 'chainer-verifier-wheel-linux-{}'.format(cuda_version)
             base_image = WHEEL_LINUX_CONFIGS[cuda_version]['verify_image']
             systems = WHEEL_LINUX_CONFIGS[cuda_version]['verify_systems']
         else:
@@ -408,7 +400,7 @@ class Controller(object):
         agent_args += ['tests']
 
         # Create a working directory.
-        workdir = tempfile.mkdtemp(prefix='cupy-dist-')
+        workdir = tempfile.mkdtemp(prefix='chainer-dist-')
 
         try:
             log('Using working directory: {}'.format(workdir))
@@ -461,7 +453,7 @@ class Controller(object):
         agent_args += ['tests']
 
         # Create a working directory.
-        workdir = tempfile.mkdtemp(prefix='cupy-dist-')
+        workdir = tempfile.mkdtemp(prefix='chainer-dist-')
 
         try:
             log('Using working directory: {}'.format(workdir))
