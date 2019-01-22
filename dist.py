@@ -13,7 +13,6 @@ import time
 
 
 from dist_config import (
-    CYTHON_VERSION,
     SDIST_CONFIG,
     SDIST_LONG_DESCRIPTION,
     WHEEL_LINUX_CONFIGS,
@@ -44,42 +43,6 @@ def run_command(*cmd, **kwargs):
     subprocess.check_call(cmd, **kwargs)
 
 
-def make_random_name(length=10):
-    return ''.join(
-        random.choice(string.ascii_lowercase + string.digits)
-        for i in range(length))
-
-
-def extract_nccl_archive(nccl_config, nccl_assets, dest_dir):
-    log('Extracting NCCL assets from {} to {}'.format(nccl_assets, dest_dir))
-    asset_type = nccl_config['type']
-    if asset_type == 'v1-deb':
-        for nccl_deb in nccl_config['files']:
-            run_command(
-                'dpkg', '-x',
-                '{}/{}'.format(nccl_assets, nccl_deb),
-                dest_dir,
-            )
-        # Adjust paths to align with tarball.
-        shutil.move(
-            '{}/usr/lib/x86_64-linux-gnu'.format(dest_dir),
-            '{}/lib'.format(dest_dir)
-        )
-        shutil.move(
-            '{}/usr/include'.format(dest_dir),
-            '{}/include'.format(dest_dir)
-        )
-    elif asset_type == 'v2-tar':
-        for nccl_tar in nccl_config['files']:
-            run_command(
-                'tar', '-x',
-                '-f', '{}/{}'.format(nccl_assets, nccl_tar),
-                '-C', dest_dir, '--strip', '1',
-            )
-    else:
-        raise RuntimeError('unknown NCCL asset type: {}'.format(asset_type))
-
-
 class Controller(object):
 
     def parse_args(self):
@@ -95,9 +58,6 @@ class Controller(object):
             required=True,
             help='build target')
         parser.add_argument(
-            '--nccl-assets', type=str,
-            help='path to the directory containing NCCL distributions')
-        parser.add_argument(
             '--cuda', type=str,
             help='CUDA version for the wheel distribution')
         parser.add_argument(
@@ -107,7 +67,7 @@ class Controller(object):
         # Build mode options:
         parser.add_argument(
             '--source', type=str,
-            help='[build] path to the CuPy source tree; '
+            help='[build] path to the source tree; '
                  'must be a clean checkout')
         parser.add_argument(
             '--output', type=str, default='.',
@@ -117,10 +77,10 @@ class Controller(object):
         # Verify mode options:
         parser.add_argument(
             '--dist', type=str,
-            help='[verify] path to the CuPy distribution (sdist or wheel)')
+            help='[verify] path to the distribution (sdist or wheel)')
         parser.add_argument(
             '--test', type=str, action='append', default=[],
-            help='[verify] path to the directory containing CuPy unit tests '
+            help='[verify] path to the directory containing unit tests '
                  '(can be specified for multiple times)')
 
         args = parser.parse_args()
@@ -140,20 +100,20 @@ class Controller(object):
         if args.action == 'build':
             if args.target == 'wheel-win':
                 self.build_windows(
-                    args.target, args.nccl_assets, args.cuda, args.python,
+                    args.target, args.cuda, args.python,
                     args.source, args.output)
             else:
                 self.build_linux(
-                    args.target, args.nccl_assets, args.cuda, args.python,
+                    args.target, args.cuda, args.python,
                     args.source, args.output)
         elif args.action == 'verify':
             if args.target == 'wheel-win':
                 self.verify_windows(
-                    args.target, args.nccl_assets, args.cuda, args.python,
+                    args.target, args.cuda, args.python,
                     args.dist, args.test)
             else:
                 self.verify_linux(
-                    args.target, args.nccl_assets, args.cuda, args.python,
+                    args.target, args.cuda, args.python,
                     args.dist, args.test)
 
     def _create_builder_linux(self, image_tag, base_image):
@@ -166,7 +126,6 @@ class Controller(object):
             '--tag', image_tag,
             '--build-arg', 'base_image={}'.format(base_image),
             '--build-arg', 'python_versions={}'.format(python_versions),
-            '--build-arg', 'cython_version={}'.format(CYTHON_VERSION),
             'builder',
         )
 
@@ -207,14 +166,11 @@ class Controller(object):
         )
 
     def build_linux(
-            self, target, nccl_assets, cuda_version, python_version,
+            self, target, cuda_version, python_version,
             source, output):
         """Build a single wheel distribution for Linux."""
 
         version = get_version_from_source_tree(source)
-
-        if nccl_assets is None:
-            raise RuntimeError('NCCL assets must be specified for Linux')
 
         if target == 'wheel-linux':
             log(
@@ -225,7 +181,6 @@ class Controller(object):
             image_tag = 'cupy-builder-{}'.format(cuda_version)
             base_image = WHEEL_LINUX_CONFIGS[cuda_version]['image']
             package_name = WHEEL_LINUX_CONFIGS[cuda_version]['name']
-            nccl_config = WHEEL_LINUX_CONFIGS[cuda_version]['nccl']
             long_description = WHEEL_LONG_DESCRIPTION.format(cuda=cuda_version)
             # Rename wheels to manylinux1.
             asset_name = wheel_name(
@@ -238,12 +193,10 @@ class Controller(object):
             action = 'sdist'
             image_tag = 'cupy-builder-sdist'
             base_image = SDIST_CONFIG['image']
-            package_name = 'cupy'
-            nccl_config = SDIST_CONFIG['nccl']
+            package_name = 'chainer'
             long_description = SDIST_LONG_DESCRIPTION
-            asset_name = sdist_name('cupy', version)
+            asset_name = sdist_name('chainer', version)
             asset_dest_name = asset_name
-            assert nccl_config is not None
         else:
             raise RuntimeError('unknown target')
 
@@ -254,8 +207,6 @@ class Controller(object):
             '--python', python_version,
             '--chown', '{}:{}'.format(os.getuid(), os.getgid()),
         ]
-        if nccl_config:
-            agent_args += ['--nccl', 'nccl']
 
         # Add arguments to pass to setup.py.
         setup_args = [
@@ -279,18 +230,6 @@ class Controller(object):
 
         try:
             log('Using working directory: {}'.format(workdir))
-
-            # Copy source tree and NCCL to working directory.
-            log('Copying source tree from: {}'.format(source))
-            shutil.copytree(source, '{}/cupy'.format(workdir))
-
-            # Extract NCCL.
-            if nccl_config:
-                nccl_workdir = '{}/nccl'.format(workdir)
-                os.mkdir(nccl_workdir)
-                extract_nccl_archive(nccl_config, nccl_assets, nccl_workdir)
-            else:
-                log('NCCL is not used for this package')
 
             # Add long description file.
             if long_description is not None:
@@ -340,7 +279,7 @@ class Controller(object):
                     cuda_version, current_cuda_version))
 
     def build_windows(
-            self, target, nccl_assets, cuda_version, python_version,
+            self, target, cuda_version, python_version,
             source, output):
         """Build a single wheel distribution for Windows.
 
@@ -352,9 +291,6 @@ class Controller(object):
 
         if target != 'wheel-win':
             raise ValueError('unknown target')
-
-        if nccl_assets is not None:
-            raise RuntimeError('NCCL not supported on Windows')
 
         version = get_version_from_source_tree(source)
 
@@ -398,7 +334,7 @@ class Controller(object):
         try:
             log('Using working directory: {}'.format(workdir))
 
-            # Copy source tree and NCCL to working directory.
+            # Copy source tree to working directory.
             log('Copying source tree from: {}'.format(source))
             shutil.copytree(source, '{}/cupy'.format(workdir))
 
@@ -433,7 +369,7 @@ class Controller(object):
                         e, workdir))
 
     def verify_linux(
-            self, target, nccl_assets, cuda_version, python_version,
+            self, target, cuda_version, python_version,
             dist, tests):
         """Verify a single distribution for Linux."""
 
@@ -441,13 +377,11 @@ class Controller(object):
             image_tag = 'cupy-verifier-sdist'
             base_image = SDIST_CONFIG['verify_image']
             systems = SDIST_CONFIG['verify_systems']
-            nccl_config = SDIST_CONFIG['nccl']
             assert cuda_version is None
         elif target == 'wheel-linux':
             image_tag = 'cupy-verifier-wheel-linux-{}'.format(cuda_version)
             base_image = WHEEL_LINUX_CONFIGS[cuda_version]['verify_image']
             systems = WHEEL_LINUX_CONFIGS[cuda_version]['verify_systems']
-            nccl_config = None
         else:
             raise RuntimeError('unknown target')
 
@@ -457,12 +391,10 @@ class Controller(object):
             log('Starting verification for {} on {} with Python {}'.format(
                 dist, image, python_version))
             self._verify_linux(
-                image_tag_system, image, dist, tests,
-                python_version, nccl_assets, nccl_config)
+                image_tag_system, image, dist, tests, python_version)
 
     def _verify_linux(
-            self, image_tag, base_image, dist, tests, python_version,
-            nccl_assets, nccl_config):
+            self, image_tag, base_image, dist, tests, python_version):
         dist_basename = os.path.basename(dist)
 
         # Arguments for the agent.
@@ -471,8 +403,6 @@ class Controller(object):
             '--dist', dist_basename,
             '--chown', '{}:{}'.format(os.getuid(), os.getgid()),
         ]
-        if nccl_config:
-            agent_args += ['--nccl', 'nccl']
 
         # Add arguments for `python -m pytest`.
         agent_args += ['tests']
@@ -494,14 +424,6 @@ class Controller(object):
                     test,
                     '{}/{}'.format(tests_dir, os.path.basename(test)))
 
-            # Extract NCCL.
-            if nccl_config:
-                nccl_workdir = '{}/nccl'.format(workdir)
-                os.mkdir(nccl_workdir)
-                extract_nccl_archive(nccl_config, nccl_assets, nccl_workdir)
-            else:
-                log('NCCL is not installed for verification')
-
             # Creates a Docker image to verify specified distribution.
             self._create_verifier_linux(image_tag, base_image)
 
@@ -515,7 +437,7 @@ class Controller(object):
             shutil.rmtree(workdir)
 
     def verify_windows(
-            self, target, nccl_assets, cuda_version, python_version,
+            self, target, cuda_version, python_version,
             dist, tests):
         """Verify a single distribution for Windows."""
 
@@ -524,9 +446,6 @@ class Controller(object):
 
         if target != 'wheel-win':
             raise ValueError('unknown target')
-
-        if nccl_assets is not None:
-            raise RuntimeError('NCCL not supported on Windows')
 
         log('Starting verification for {} with Python {}'.format(
             dist, python_version))

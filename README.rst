@@ -1,5 +1,5 @@
-cupy-release-tools
-==================
+chainer-release-tools
+=====================
 
 Tools to automate the CuPy release process.
 
